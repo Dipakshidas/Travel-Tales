@@ -1,0 +1,259 @@
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
+import placeApi from "../apiConfig";
+import { useAuth } from "./AuthContext";
+import "./Login.css";
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+
+const AUTH_BASE = placeApi.API_BASE_URL.replace(/\/api\/places\/?$/i, "/api/Authentication");
+const LOGIN_URL = `${AUTH_BASE}/login`;
+const USE_COOKIE_SESSION = false;
+
+function tryParseJSON(text) {
+  try {
+    if (typeof text !== "string") return null;
+    const t = text.trim();
+    if (!(t.startsWith("{") || t.startsWith("["))) return null;
+    return JSON.parse(t);
+  } catch {
+    return null;
+  }
+}
+function extractJwtLikeToken(text) {
+  if (typeof text !== "string") return null;
+  const bearerMatch = text.match(/Bearer\s+([A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+)/);
+  if (bearerMatch?.[1]) return bearerMatch[1];
+  const jwtMatch = text.match(/\b([A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+)\b/);
+  if (jwtMatch?.[1]) return jwtMatch[1];
+  return null;
+}
+function normalizeServerMessage(data) {
+  if (typeof data === "string") {
+    const maybe = tryParseJSON(data);
+    return maybe?.message ?? data;
+  }
+  if (data && typeof data === "object") {
+    return data.message ?? "";
+  }
+  return "";
+}
+function isGuidePendingMessage(msg) {
+  return /guide.*pending.*admin.*approval/i.test(String(msg || ""));
+}
+
+
+function computeRouteByRole(roles) {
+  const lower = Array.isArray(roles)
+    ? roles.map((r) => String(r).toLowerCase())
+    : [String(roles || "").toLowerCase()].filter(Boolean);
+
+  if (lower.some((r) => r.includes("admin"))) return "/admin/home";
+  if (lower.includes("guide")) return "/places";
+  if (lower.includes("traveller") || lower.includes("traveler")) return "/traveller/places";
+  return "/home";
+}
+
+const Login = () => {
+  const navigate = useNavigate();
+  const { login, logout } = useAuth();
+
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      const next = { ...errors };
+      delete next[name];
+      setErrors(next);
+    }
+  };
+
+  const validate = () => {
+    const temp = {};
+    if (!form.email) temp.email = "Email is required";
+    else if (!emailRegex.test(form.email)) temp.email = "Please enter a valid email";
+    if (!form.password) temp.password = "Password is required";
+    return temp;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setFormError("");
+
+    const v = validate();
+    setErrors(v);
+    if (Object.keys(v).length > 0) return;
+
+    setSubmitting(true);
+    try {
+      const body = { Email: form.email.trim(), Password: form.password };
+      const res = await axios.post(LOGIN_URL, body, {
+        headers: {
+          Accept: "application/json, text/plain;q=0.9, */*;q=0.8",
+          "Content-Type": "application/json",
+        },
+        withCredentials: USE_COOKIE_SESSION,
+        timeout: 12000,
+        validateStatus: () => true, 
+      });
+
+      const { status } = res;
+      const data = res.data;
+      const message = normalizeServerMessage(data);
+
+     
+      if (status === 423 || isGuidePendingMessage(message)) {
+        try { logout(); } catch {}
+        setFormError(message || "Your guide account is not approved by admin yet.");
+        return;
+      }
+
+      if (status === 401 || status === 403 || status === 400) {
+        setFormError(message || "Invalid email or password. Please try again.");
+        return;
+      }
+      if (status === 404) {
+        setFormError(`Login endpoint not found at ${LOGIN_URL}.`);
+        return;
+      }
+      if (status !== 200) {
+        setFormError(message || "Something went wrong. Please try again.");
+        return;
+      }
+
+      let token = null;
+      let roles = [];
+      let isGuideApproved = undefined;
+
+      if (typeof data === "string") {
+        token = extractJwtLikeToken(data);
+      } else if (data && typeof data === "object") {
+        token = data.token ?? data.jwtToken ?? null;
+        roles = Array.isArray(data.roles)
+          ? data.roles
+          : Array.isArray(data.user?.roles)
+          ? data.user.roles
+          : [];
+        isGuideApproved =
+          typeof data.isGuideApproved === "boolean"
+            ? data.isGuideApproved
+            : typeof data.user?.isGuideApproved === "boolean"
+            ? data.user.isGuideApproved
+            : undefined;
+      }
+
+      const normalizedUser = {
+        username: form.email.split("@")[0],
+        email: form.email,
+        roles,
+        isGuideApproved,
+        expires: null,
+        userId: null,
+      };
+
+      login({ token, user: normalizedUser });
+
+      const dest = computeRouteByRole(normalizedUser.roles);
+      navigate(dest, { replace: true });
+
+      setForm({ email: "", password: "" });
+    } catch (err) {
+      const status = err?.response?.status;
+      let message =
+        (typeof err?.response?.data === "string" && err.response.data) ||
+        err?.message ||
+        "Something went wrong. Please try again.";
+
+     
+      if (status === 423 || isGuidePendingMessage(message)) {
+        try { logout(); } catch {}
+        setFormError(
+          message || "Your guide account is not approved by admin yet."
+        );
+        return; 
+      }
+
+      if (status === 401) message = message || "Invalid email or password. Please try again.";
+      else if (status === 404) message = `Login endpoint not found at ${LOGIN_URL}.`;
+      else if (status === 423) message = "Account is locked. Please try again later."; 
+
+      setFormError(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="page">
+      <div className="panel">
+        <section className="intro" aria-label="About Travel Tales">
+          <h1 className="brand">Travel Tales</h1>
+          <p className="lead">
+            Welcome to Travel Tales, your gateway to exploring stunning travel destinations around the world.
+            Discover curated itineraries, find your perfect getaway, and receive personalized recommendations
+            tailored to your travel style and budget.
+          </p>
+        </section>
+
+        <section className="card-wrap">
+          <form className="card" onSubmit={handleSubmit} aria-labelledby="login-title" noValidate>
+            <h2 id="login-title" className="card-title">Login</h2>
+
+            {formError && <p className="form-error" role="alert">{formError}</p>}
+
+            <label htmlFor="email" className="sr-only">Email</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="Email"
+              value={form.email}
+              onChange={handleChange}
+              autoComplete="email"
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? "email-error" : undefined}
+              className={`input underline ${errors.email ? "invalid" : ""}`}
+            />
+            {errors.email && (
+              <p id="email-error" className="field-error" role="alert">{errors.email}</p>
+            )}
+
+            <label htmlFor="password" className="sr-only">Password</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="Password"
+              value={form.password}
+              onChange={handleChange}
+              autoComplete="current-password"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
+              className={`input underline ${errors.password ? "invalid" : ""}`}
+            />
+            {errors.password && (
+              <p id="password-error" className="field-error" role="alert">{errors.password}</p>
+            )}
+
+            <button type="submit" className="btn primary" disabled={submitting} aria-busy={submitting}>
+              {submitting ? "Logging in…" : "Login"}
+            </button>
+
+            <p className="small">
+              Don't have an account?{" "}
+              <Link to="/signup" className="link">Signup</Link>
+            </p>
+          </form>
+        </section>
+      </div>
+    </div>
+  );
+};
+
+export default Login;
