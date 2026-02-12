@@ -1,0 +1,168 @@
+import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import "./TravellerViewPlace.css";
+import placeApi from "../apiConfig";
+
+const FALLBACK_IMG =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="220">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e5e7eb"/>
+      <stop offset="1" stop-color="#f1f5f9"/>
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#g)"/>
+  <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#6b7280">
+    No Image
+  </text>
+</svg>`);
+
+const getId = (p) => p?.PlaceId ?? p?.placeId ?? p?.id ?? `${getName(p)}-${getLocation(p)}`;
+const getName = (p) => p?.Name ?? p?.name ?? "";
+const getCategory = (p) => p?.Category ?? p?.category ?? "";
+const getLocation = (p) => p?.Location ?? p?.location ?? "";
+const getBestTime = (p) =>
+  p?.BestTimeToVisit ?? p?.bestTimeToVisit ?? p?.best_time_to_visit ?? p?.besttimetovisit ?? "";
+const getImageField = (p) =>
+  p?.PlaceImage ?? p?.placeImage ?? p?.imageBase64 ?? p?.image ?? p?.imageurl ?? p?.imageUrl ?? p?.ImageUrl ?? "";
+
+
+const asImgSrc = (p) => {
+  const raw = getImageField(p);
+  if (!raw || typeof raw !== "string") return FALLBACK_IMG;
+
+  const trimmed = raw.trim();
+  if (!trimmed) return FALLBACK_IMG;
+
+  if (trimmed.startsWith("data:")) return trimmed;      
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;        
+  return `data:image/webp;base64,${trimmed}`;               
+};
+
+export default function TravellerViewPlaces() {
+  const [places, setPlaces] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setErrorMsg("");
+
+    axios
+      .get(placeApi.API_BASE_URL, {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      })
+      .then((res) => {
+        const data = Array.isArray(res.data) ? res.data : res.data?.items ?? [];
+        setPlaces(data);
+      })
+      .catch((err) => {
+        if (axios.isCancel(err)) return;
+        const msg =
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to fetch places.";
+        setErrorMsg(msg);
+      })
+      .finally(() => setLoading(false));
+
+    return () => controller.abort();
+  }, []);
+
+  const list = useMemo(() => places, [places]);
+
+  const handleImgError = (e) => {
+    const img = e.currentTarget;
+    if (img.dataset.fallbackApplied) return;
+    img.dataset.fallbackApplied = "true";
+    img.src = FALLBACK_IMG;
+  };
+
+  return (
+    <div className="tt-app">
+      <main className="tt-container">
+        <h2 className="tt-title">Available Places</h2>
+
+        {loading && <div className="tt-state tt-state--info">Loading places…</div>}
+        {!loading && errorMsg && (
+          <div className="tt-state tt-state--error">{errorMsg}</div>
+        )}
+
+        {loading && (
+          <section className="tt-grid" aria-label="Loading cards">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <article key={`sk-${i}`} className="tt-card tt-card--skeleton">
+                <div className="tt-card__media skel" />
+                <div className="tt-card__body">
+                  <div className="skel skel-line" />
+                  <div className="skel skel-line short" />
+                  <div className="skel skel-line" />
+                </div>
+              </article>
+            ))}
+          </section>
+        )}
+
+        {!loading && !errorMsg && (
+          list?.length > 0 ? (
+            <section className="tt-grid" aria-label="Places">
+              {list.map((p) => (
+                <article key={getId(p)} className="tt-card" role="article">
+                  <div className="tt-card__media">
+                    <img
+                      src={asImgSrc(p)}
+                      alt={getName(p) || "Place image"}
+                      onError={handleImgError}
+                      loading="lazy"
+                    />
+                  </div>
+
+                  <div className="tt-card__body">
+                    <h3 className="tt-card__title">
+                      {getName(p) || "Untitled Place"}
+                    </h3>
+
+                    <dl className="tt-card__meta">
+                      <div className="tt-meta__row">
+                        <dt>Category</dt>
+                        <dd>{getCategory(p) || "—"}</dd>
+                      </div>
+                      <div className="tt-meta__row">
+                        <dt>Location</dt>
+                        <dd>{getLocation(p) || "—"}</dd>
+                      </div>
+                      <div className="tt-meta__row">
+                        <dt>Best Time</dt>
+                        <dd>{getBestTime(p) || "—"}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                </article>
+              ))}
+            </section>
+          ) : (
+            <div className="tt-empty tt-empty--panel">
+              <div className="vp-loader" role="status" aria-live="polite" aria-label="Loading places">
+                <div className="vp-orbit">
+                  <div className="vp-globe">
+                    <span className="vp-lat lat-1"></span>
+                    <span className="vp-lat lat-2"></span>
+                    <span className="vp-lon lon-1"></span>
+                    <span className="vp-lon lon-2"></span>
+                  </div>
+                  <div className="vp-plane-emoji" aria-hidden="true">✈️</div>
+                </div>
+                <p className="vp-loader-text">Planning your journey…</p>
+              </div>
+            </div>
+          )
+        )}
+      </main>
+    </div>
+  );
+}
