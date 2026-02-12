@@ -1,0 +1,253 @@
+import React, { useEffect, useRef, useState } from "react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import placeApi from "../apiConfig";
+import "./ViewPlace.css";
+
+const ViewPlace = () => {
+  const [places, setPlaces] = useState([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  const navigate = useNavigate();
+
+  const modalRef = useRef(null);
+  useEffect(() => {
+    if (showDeleteModal || showSuccessModal) {
+      const firstBtn = modalRef.current?.querySelector("button");
+      firstBtn?.focus();
+    }
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setShowDeleteModal(false);
+        setShowSuccessModal(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showDeleteModal, showSuccessModal]);
+
+  useEffect(() => {
+    fetchPlaces();
+  }, []);
+
+  const fetchPlaces = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const res = await axios.get(`${placeApi.API_BASE_URL}`);
+      const list = Array.isArray(res.data) ? res.data : res.data?.items ?? [];
+      setPlaces(list);
+    } catch (err) {
+      setError(err?.response?.data ?? "Failed to load places.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openDeleteModal = (id) => {
+    setDeleteId(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await axios.delete(`${placeApi.API_BASE_URL}/${deleteId}`);
+      setShowDeleteModal(false);
+      setShowSuccessModal(true);
+      fetchPlaces();
+    } catch (err) {
+      alert(err?.response?.data ?? "Error deleting place.");
+    }
+  };
+
+  const placeIdOf = (p) => p.placeId ?? p.PlaceId ?? p.id ?? p._id;
+  const nameOf = (p) => p.name ?? p.Name ?? "";
+  const categoryOf = (p) => p.category ?? p.Category ?? "";
+  const locationOf = (p) => p.location ?? p.Location ?? "";
+  const bestTimeOf = (p) =>
+    p.bestTimeToVisit ?? p.BestTimeToVisit ?? p.best_time_to_visit ?? p.besttimetovisit ?? "";
+  const imageOf = (p) =>
+    p.placeImage ?? p.PlaceImage ?? p.imageurl ?? p.imageUrl ?? p.ImageUrl ?? "";
+
+  return (
+    <div className="vp-page">
+      <div className="vp-hero">
+        <div className="vp-hero-left">
+          <h1 className="vp-title vp-title-gradient">
+            <svg
+              className="vp-title-pin"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+            >
+              <path d="M8 0a5 5 0 0 0-5 5c0 4.25 5 11 5 11s5-6.75 5-11a5 5 0 0 0-5-5Zm0 7.5A2.5 2.5 0 1 1 8 2.5a2.5 2.5 0 0 1 0 5Z" />
+            </svg>
+            Places
+            {!loading ? (
+              <span className="vp-count-pill">
+                {places.length} place{places.length === 1 ? "" : "s"}
+              </span>
+            ) : (
+              <span className="vp-count-pill">Loading…</span>
+            )}
+          </h1>
+          <br></br>
+          <strong className="vp-hero-sub">Curate destinations with images, categories and best seasons.</strong>
+        </div>
+
+        <div className="vp-hero-actions">
+          <button className="vp-btn-primary vp-btn-lg" onClick={() => navigate("/places/new")}>
+            + Add Place
+          </button>
+        </div>
+      </div>
+
+      <div className="vp-card">
+        <div className="vp-card-body">
+          {error && <div className="vp-alert-error">{error}</div>}
+
+          {loading ? (
+            <div className="vp-loader" role="status" aria-live="polite" aria-label="Loading places">
+              <div className="vp-orbit">
+                <div className="vp-globe">
+                  <span className="vp-lat lat-1"></span>
+                  <span className="vp-lat lat-2"></span>
+                  <span className="vp-lon lon-1"></span>
+                  <span className="vp-lon lon-2"></span>
+                </div>
+                <div className="vp-plane-emoji" aria-hidden="true">✈️</div>
+              </div>
+              <p className="vp-loader-text">Planning your journey…</p>
+            </div>
+          ) : places.length === 0 ? (
+
+            <div className="vp-empty-modern">
+              <div className="vp-empty-mark" aria-hidden="true">🧭</div>
+              <h3 className="vp-empty-title">No Places Yet</h3>
+              <p className="vp-empty-subtitle">
+                Start your collection by adding your first destination.
+              </p>
+              <button className="vp-btn-primary vp-empty-add" onClick={() => navigate("/places/new")}>
+                Add New Place
+              </button>
+            </div>
+          ) : (
+
+            <div className="vp-grid" role="list">
+              {places.map((p) => {
+                const pid = placeIdOf(p);
+                const name = nameOf(p);
+                const category = categoryOf(p);
+                const location = locationOf(p);
+                const bestTime = bestTimeOf(p);
+                const rawUrl = imageOf(p);
+                const displayUrl = rawUrl && typeof rawUrl === "string" ? rawUrl : "";
+
+                return (
+                  <article key={pid} className="vp-place-card" role="listitem">
+                    <div className="vp-card-media">
+                      {displayUrl ? (
+                        <>
+                          <img
+                            src={displayUrl}
+                            alt={name || "Place image"}
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                              e.currentTarget.nextElementSibling?.classList.add("show");
+                            }}
+                          />
+                          <div className="vp-no-image" aria-hidden="true">
+                            <span className="vp-no-image-icon">🗺️</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="vp-no-image" aria-hidden="true">
+                          <span className="vp-no-image-icon">🗺️</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="vp-card-content">
+                      <h3 className="vp-card-title">{name || "Untitled Place"}</h3>
+
+                      <div className="vp-card-meta">
+                        <span className="vp-meta-chip">{category || "—"}</span>
+                        <span className="vp-meta-dot" aria-hidden="true">•</span>
+                        <span className="vp-meta-text">{location || "—"}</span>
+                      </div>
+
+                      <div className="vp-card-sub">
+                        <strong>Best Time To Visit:</strong> {bestTime || "—"}
+                      </div>
+
+                      <div className="vp-card-actions">
+                        <button
+                          className="vp-btn-text"
+                          onClick={() => navigate(`/places/${pid}/edit`)}
+                          aria-label={`Edit ${name || "place"}`}
+                          title="Edit"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          className="vp-btn-text danger"
+                          onClick={() => openDeleteModal(pid)}
+                          aria-label={`Delete ${name || "place"}`}
+                          title="Delete"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showDeleteModal && (
+        <div
+          className="vp-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Delete place confirmation"
+        >
+          <div className="vp-modal-box" ref={modalRef}>
+            <p className="vp-modal-message">Are you sure you want to delete this place?</p>
+            <div className="vp-modal-actions">
+              <button className="vp-btn-primary" onClick={confirmDelete}>
+                Yes, Delete
+              </button>
+              <button className="vp-btn-ghost" onClick={() => setShowDeleteModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSuccessModal && (
+        <div className="vp-modal-overlay" role="dialog" aria-modal="true" aria-label="Delete success">
+          <div className="vp-modal-box" ref={modalRef}>
+            <p className="vp-modal-message">Place deleted successfully!</p>
+            <div className="vp-modal-actions">
+              <button className="vp-btn-primary" onClick={() => setShowSuccessModal(false)}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ViewPlace;
