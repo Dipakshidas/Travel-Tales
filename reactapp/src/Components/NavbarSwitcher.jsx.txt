@@ -1,0 +1,272 @@
+import React, { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../Components/AuthContext";
+import GuideNavbar from "../GuideComponents/GuideNavbar";
+import TravellerNavbar from "../TravellerComponents/TravellerNavbar";
+import "./NavbarSwitcher.css";
+
+export default function NavbarSwitcher() {
+  const { auth, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const notHome = location.pathname !== "/home" && location.pathname !== "/";
+
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [navH, setNavH] = useState(0); 
+
+  const aboutSheetRef = useRef(null);
+  const contactDrawerRef = useRef(null);
+
+  useEffect(() => {
+    const nav = document.querySelector(".navbar");
+    setNavH(nav ? nav.offsetHeight : 0);
+  }, []);
+
+  const goBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/home", { replace: true });
+  };
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        setAboutOpen(false);
+        setContactOpen(false);
+      }
+    };
+    const onClick = (e) => {
+      if (aboutOpen && aboutSheetRef.current && !aboutSheetRef.current.contains(e.target)) {
+        const inBackdrop = e.target.closest?.(".sheet-backdrop");
+        if (inBackdrop) setAboutOpen(false);
+      }
+      if (contactOpen && contactDrawerRef.current && !contactDrawerRef.current.contains(e.target)) {
+        const inBackdrop = e.target.closest?.(".drawer-backdrop");
+        if (inBackdrop) setContactOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [aboutOpen, contactOpen]);
+  const toggleAbout = () => {
+    setAboutOpen((v) => !v);
+    setContactOpen(false);
+  };
+  const toggleContact = () => {
+    setContactOpen((v) => !v);
+    setAboutOpen(false);
+  };
+
+  const DIRECT_GIF =
+    "https://mir-s3-cdn-cf.behance.net/project_modules/source/59b73f47211133.5873edc005312.gif";
+
+  const Brand = (
+    <Link
+      to="/home"
+      className="navbar__brand navbar__brand--gif"
+      aria-label="Travel Tales Home"
+    >
+      <span className="logo-iframe-wrap" aria-hidden="true">
+        <img
+          src={DIRECT_GIF}
+          alt="Travel Tales logo"
+          className="navbar__logo-gif"
+          loading="eager"
+          decoding="async"
+        />
+      </span>
+      <span>Travel Tales</span>
+    </Link>
+  );
+
+  if (!auth) {
+    return (
+      <>
+        <nav className="navbar">
+          <div className="navbar__left">
+            {Brand}
+          </div>
+
+          <div className="navbar__right">
+            {notHome && (
+              <Link
+                to="/home"
+                className="btn btn--link-only"
+                aria-current={location.pathname === "/home" ? "page" : undefined}
+                title="Go to Home"
+              >
+                Home
+              </Link>
+            )}
+
+            <button
+              type="button"
+              className="btn btn--link-only"
+              aria-haspopup="dialog"
+              aria-expanded={aboutOpen}
+              onClick={toggleAbout}
+            >
+              About
+            </button>
+            <button
+              type="button"
+              className="btn btn--link-only"
+              aria-haspopup="dialog"
+              aria-expanded={contactOpen}
+              onClick={toggleContact}
+            >
+              Contact Us
+            </button>
+          </div>
+        </nav>
+
+        {aboutOpen && (
+          <>
+            <div className="sheet-backdrop" role="presentation" />
+            <section
+              className="top-sheet"
+              style={{ top: navH || 0 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="About Travel Tales"
+              ref={aboutSheetRef}
+            >
+              <header className="top-sheet__header">
+                <div className="badge">
+                  <span aria-hidden="true">🧭</span> Travel Tales
+                </div>
+                <button
+                  className="top-sheet__close"
+                  onClick={() => setAboutOpen(false)}
+                  aria-label="Close About panel"
+                  title="Close"
+                >
+                  ×
+                </button>
+              </header>
+
+              <div className="top-sheet__body">
+                <h3 className="top-sheet__title">
+                  Every trip is a story. We help you <em>write</em> it.
+                </h3>
+
+                <div className="facts-grid">
+                  <article className="fact">
+                    <h4>Routes with Soul</h4>
+                    <p>Find guides who don’t just navigate— they narrate. From alleyway legends to mountain myths.</p>
+                  </article>
+                  <article className="fact">
+                    <h4>Vibes, not just places</h4>
+                    <p>Pick a mood—<strong>chill</strong>, <strong>thrill</strong>, or <strong>photo‑worthy</strong>—and let the itinerary evolve with you.</p>
+                  </article>
+                  <article className="fact">
+                    <h4>Hidden Gems</h4>
+                    <p>Powered by local tips &amp; seasoned travellers. Your map becomes a living collection over time.</p>
+                  </article>
+                  <article className="fact">
+                    <h4>Fast for Guides</h4>
+                    <p>Create trails, set pricing &amp; availability in minutes. Publish once—shine everywhere.</p>
+                  </article>
+                </div>
+
+                <div className="chips">
+                  <span className="chip">#Plan</span>
+                  <span className="chip">#Book</span>
+                  <span className="chip">#Share</span>
+                </div>
+              </div>
+            </section>
+          </>
+        )}
+
+        {contactOpen && (
+          <>
+            <div className="drawer-backdrop" role="presentation" />
+            <aside
+              className="side-drawer"
+              style={{ top: navH || 0 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Contact Travel Tales"
+              ref={contactDrawerRef}
+            >
+              <header className="drawer__header">
+                <h4>Contact Us</h4>
+                <button
+                  className="drawer__close"
+                  onClick={() => setContactOpen(false)}
+                  aria-label="Close Contact panel"
+                  title="Close"
+                >
+                  ×
+                </button>
+              </header>
+
+              <div className="drawer__body">
+                <div className="contact-row">
+                  <span className="icon" aria-hidden="true">✉️</span>
+                  <a className="contact-link" href="mailto:support@traveltales.app">
+                    support@traveltales.app
+                  </a>
+                </div>
+                <div className="contact-row">
+                  <span className="icon" aria-hidden="true">📞</span>
+                  <a className="contact-link" href="tel:+18001234567">
+                    +1 (800) 123‑4567
+                  </a>
+                </div>
+                <div className="contact-row">
+                  <span className="icon" aria-hidden="true">📍</span>
+                  <span className="contact-text">Bengaluru, India</span>
+                </div>
+                <div className="contact-row small">
+                  <span className="icon" aria-hidden="true">⏰</span>
+                  <span className="contact-text">Support: Mon–Sat, 9:00–18:00 IST</span>
+                </div>
+
+                <hr className="drawer__divider" />
+
+                <div className="contact-row">
+                  <span className="icon" aria-hidden="true">💬</span>
+                  <span className="contact-text">We typically respond within 24 hours.</span>
+                </div>
+              </div>
+            </aside>
+          </>
+        )}
+      </>
+    );
+  }
+
+  if (auth.role === "guide") return <GuideNavbar onLogout={logout} />;
+  if (auth.role === "traveller") return <TravellerNavbar onLogout={logout} />;
+
+  return (
+    <nav className="navbar">
+      <div className="navbar__left">
+        {notHome && (
+          <button
+            type="button"
+            onClick={goBack}
+            className="btn btn--back-only"
+            aria-label="Go back"
+            title="Back"
+          >
+            ← Back
+          </button>
+        )}
+        {Brand}
+      </div>
+      <div className="navbar__right">
+        <Link className="btn btn--link-only" to="/home">Home</Link>
+        <span className="navbar__sep" aria-hidden="true">|</span>
+        <button className="btn btn--secondary" onClick={logout}>Logout</button>
+      </div>
+    </nav>
+  );
+}
