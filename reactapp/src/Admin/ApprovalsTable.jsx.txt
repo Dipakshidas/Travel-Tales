@@ -1,0 +1,206 @@
+import React, { useEffect, useState, useCallback } from "react";
+import placeApi from "../apiConfig";
+import axios from "axios";
+import "./approvals-table.css";
+
+const ApprovalsTable = () => {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errMsg, setErrMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+  const [actionId, setActionId] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErrMsg("");
+      const AUTH_BASE = placeApi.API_BASE_URL.replace(/\/api\/places\/?$/i, "/api/Authentication");
+
+      const res = await axios.get(`${AUTH_BASE}/pending/guides`, {
+        headers: { Accept: "application/json" },
+        timeout: 12000,
+      });
+      
+      const payload = res?.data;
+      const items =
+        Array.isArray(payload) ? payload :
+          Array.isArray(payload?.data) ? payload.data :
+            Array.isArray(payload?.result) ? payload.result :
+              [];
+
+      const normalized = items.map((x) => ({
+        id: x.id ?? x.Id ?? x.userId,
+        username: x.username ?? x.userName ?? x.UserName ?? "—",
+        email: x.email ?? "—",
+        mobileNumber: x.mobileNumber ?? x.mobilenumber ?? x.phoneNumber ?? x.mobile ?? "—",
+      }));
+
+      setList(normalized);
+    } catch (e) {
+      console.error("GET /api/authentication/pending/guides failed:", {
+        message: e?.message,
+        status: e?.response?.status,
+        url: e?.config?.url,
+        method: e?.config?.method,
+        responseData: e?.response?.data,
+      });
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "Failed to load pending organizers.";
+      setErrMsg(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+  const AUTH_BASE = placeApi.API_BASE_URL.replace(/\/api\/places\/?$/i, "/api/Authentication");
+  const approve = async (id) => {
+    try {
+      setActionId(id);
+      setSuccessMsg("");
+      setErrMsg("");
+
+      await axios.post(`${AUTH_BASE}/approve/guide/${id}`, null, {
+        headers: { Accept: "application/json" },
+        timeout: 12000,
+      });
+      setSuccessMsg("Guide approved successfully!");
+      setList((prev) => prev.filter((x) => x.id !== id)); // optimistic update
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Approval failed.";
+      setErrMsg(msg);
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const reject = async (id) => {
+    if (!window.confirm("Are you sure you want to reject this guide?")) return;
+
+    try {
+      setActionId(id);
+      setSuccessMsg("");
+      setErrMsg("");
+
+      await axios.delete(`${AUTH_BASE}/reject/guide/${id}`, {
+        headers: { Accept: "application/json" },
+        timeout: 12000,
+      });
+
+      setSuccessMsg("Guide rejected successfully!");
+      setList((prev) => prev.filter((x) => x.id !== id)); // optimistic update
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Reject failed.";
+      setErrMsg(msg);
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  return (
+    <>
+
+      <div className="container py-4">
+
+        <div
+          className="rounded-4 p-4 mb-4 text-white shadow-sm"
+          style={{
+            background: "linear-gradient(135deg, #d63939 0%, #c73c3c 50%, #b83232 100%)",
+          }}
+        >
+
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2"
+            style={{ backgroundColor: "#FFF8E6", padding: "10px", borderRadius: "8px" }}>
+            <div>
+              <h2 className="h3 mb-1" style={{ color: "black" }}>🛡️ Admin Approvals</h2>
+              <div className="opacity-75" style={{ color: "black" }}>Approve or reject pending guides</div>
+            </div>
+
+            <span className="badge bg-light text-dark fs-6">
+              Pending: <strong className="ms-1">{list.length}</strong>
+            </span>
+          </div>
+        </div>
+
+        {successMsg && <div className="alert alert-success">{successMsg}</div>}
+        {errMsg && <div className="alert alert-danger">{errMsg}</div>}
+
+        <div className="card border-0 shadow-sm w-100" style={{ backgroundColor: "whitesmoke" }}>
+          <div className="card-body w-100">
+            {loading ? (
+              <div className="text-center py-5">
+                <div className="spinner-border text-primary" role="status" />
+                <div className="mt-3 text-secondary">Loading Guides</div>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-hover table-striped align-middle mb-0">
+                  <thead className="table-primary">
+                    <tr>
+                      <th>Username</th>
+                      <th>Email</th>
+                      <th>Mobile</th>
+                      <th className="text-end">Action</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {list.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center py-5">
+                          <div className="display-6 mb-2">✅</div>
+                          <div className="fw-semibold">No pending guides</div>
+                          <div className="text-secondary small">
+                            All guides are approved or none of them registered yet.
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      list.map((o) => (
+                        <tr key={o.id}>
+                          <td className="fw-semibold">{o.username}</td>
+                          <td>{o.email}</td>
+                          <td>{o.mobileNumber}</td>
+                          <td className="text-end">
+                            <div className="btn-group" role="group">
+                              <button
+                                className="btn btn-sm btn-outline-success"
+                                onClick={() => approve(o.id)}
+                                disabled={actionId === o.id}
+                                aria-busy={actionId === o.id}
+                              >
+                                {actionId === o.id ? "Approving…" : "APPROVE"}
+                              </button>
+                              <button
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => reject(o.id)}
+                                disabled={actionId === o.id}
+                                aria-busy={actionId === o.id}
+                              >
+                                {actionId === o.id ? "Rejecting…" : "REJECT"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <p className="text-center text-secondary small mt-3 mb-0">
+          Tip: Guides cannot login until you approve them.
+        </p>
+      </div>
+    </>
+  );
+};
+
+export default ApprovalsTable;
