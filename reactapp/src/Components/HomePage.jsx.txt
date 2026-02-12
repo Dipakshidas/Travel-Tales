@@ -1,0 +1,78 @@
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "./AuthContext";
+import RoleSelectModal from "./RoleSelectModal";
+import "./HomePage.css";
+
+export default function HomePage() {
+  const { auth } = useAuth(); 
+  const [open, setOpen] = useState(false);
+
+  const openSignupModal = () => setOpen(true);
+  const closeSignupModal = () => setOpen(false);
+
+  return (
+    <div
+      className="home-page"
+      style={{ 
+        "--home-bg": `url(${process.env.PUBLIC_URL}/traveltalescoverimage.jpg)`
+      }}
+    >
+      
+      <div className="home-bg" aria-hidden="true" />
+      <div className="home-overlay" aria-hidden="true" />
+
+      
+      <section className="hero">
+        <h1 className="title">Travel Tales</h1>
+        <p className="subtitle">
+          Discover curated itineraries, book trusted local guides, and share
+          your own experiences with the world.
+        </p>
+
+       
+        {auth ? (
+          <div className="cta-row" style={{ gap: 8 }}>
+            <span className="welcome" style={{color:"white"}}>
+              Welcome{auth?.user?.username ? `, ${auth.user.username}` : ""}!{" "}
+              You’re signed in as <strong>{auth.role || "member"}</strong>.
+            </span>
+          </div>
+        ) : (
+          <div className="cta-row">
+            <button className="btn primary" onClick={openSignupModal}>
+              Create your account
+            </button>
+            <Link to="/login" className="btn ghost">
+              Already have an account? Log in
+            </Link>
+          </div>
+        )}
+      </section>
+
+      <section className="features">
+        <div className="feature">
+          <h3>Plan</h3>
+          <p>
+            Explore destinations and personalize trips that match your style and budget.
+          </p>
+        </div>
+        <div className="feature">
+          <h3>View</h3>
+          <p>
+           View the Places You want to visit
+          </p>
+        </div>
+        <div className="feature">
+          <h3>Share</h3>
+          <p>
+            Publish routes, tips, and stories to help travellers discover hidden gems.
+          </p>
+        </div>
+      </section>
+
+
+      <RoleSelectModal open={open && !auth} onClose={closeSignupModal} />
+    </div>
+  );
+}
