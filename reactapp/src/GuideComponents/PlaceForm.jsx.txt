@@ -1,0 +1,448 @@
+import { useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import placeApi from "../apiConfig";
+import "./PlaceForm.css";
+
+const CATEGORY_OPTIONS = [
+  "Valley",
+  "Beach",
+  "Mountain",
+  "Heritage",
+  "City",
+  "Wildlife",
+  "Island",
+  "Desert",
+  "Pilgrimage",
+  "Forest",
+  "Hill Station",
+];
+
+/* ---------------------------
+   Centered Success Modal
+   - Inline styles only
+   - Full-screen blur backdrop
+   - High z-index
+---------------------------- */
+const SuccessModal = ({ open, message, onClose }) => {
+  if (!open) return null;
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(0, 0, 0, 0.25)", // translucent dim behind modal
+        backdropFilter: "blur(8px)",            // blur everything behind
+        WebkitBackdropFilter: "blur(8px)",      // Safari support
+        zIndex: 10000,
+      }}
+      // close on backdrop click (optional)
+      onClick={(e) => {
+        // only close if the click is on the backdrop, not inside the box
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        tabIndex={-1}
+        style={{
+          background: "#fff",
+          color: "#1b1f24",
+          borderRadius: 12,
+          padding: "18px 20px",
+          minWidth: 320,
+          maxWidth: "90vw",
+          boxShadow: "0 12px 30px rgba(0,0,0,0.20)",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ marginBottom: 12, fontWeight: 700 }}>
+          {typeof message === "string" ? message : JSON.stringify(message)}
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            background: "#0d6efd",
+            color: "#fff",
+            border: "none",
+            borderRadius: 999,
+            padding: "10px 18px",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const toBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (err) => reject(err);
+  });
+
+const toErrorText = (err) => {
+  const data = err?.response?.data;
+
+  if (typeof data === "string") return data;
+  if (typeof data?.message === "string") return data.message;
+  if (typeof err?.message === "string") return err.message;
+
+  if (data && typeof data === "object") {
+    if (typeof data.detail === "string") return data.detail;
+    if (typeof data.title === "string") return data.title;
+
+    if (data.errors && typeof data.errors === "object") {
+      const lines = Object.entries(data.errors).flatMap(([field, msgs]) =>
+        (Array.isArray(msgs) ? msgs : [msgs]).map((m) => `${field}: ${m}`)
+      );
+      if (lines.length) return lines.join("\n");
+    }
+
+    try {
+      return JSON.stringify(data);
+    } catch {}
+  }
+
+  return "An unexpected error occurred.";
+};
+
+const PlaceForm = ({ mode = "add" }) => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  const [place, setPlace] = useState({
+    name: "",
+    category: "",
+    bestTimeToVisit: "",
+    location: "",
+    imageUrl: "",
+  });
+
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [error, setError] = useState({});
+  const [serverError, setServerError] = useState("");
+  const [loading, setLoading] = useState(mode === "edit");
+  const [saving, setSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
+
+  // Optional: lock background scroll when modal is open
+  useEffect(() => {
+    if (!showSuccess) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [showSuccess]);
+
+  useEffect(() => {
+    if (imageFile) {
+      const objectUrl = URL.createObjectURL(imageFile);
+      setPreviewUrl(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+    setPreviewUrl(place.imageUrl || "");
+  }, [imageFile, place.imageUrl]);
+
+  useEffect(() => {
+    if (mode !== "edit" || !id) return;
+    (async () => {
+      try {
+        const base = placeApi.API_BASE_URL;
+        const res = await axios.get(`${base}/${id}`);
+        const d = res.data || {};
+        setPlace({
+          name: d.name ?? d.Name ?? "",
+          category: d.category ?? d.Category ?? "",
+          bestTimeToVisit:
+            d.bestTimeToVisit ??
+            d.BestTimeToVisit ??
+            d.best_time_to_visit ??
+            d.besttimetovisit ??
+            "",
+          location: d.location ?? d.Location ?? "",
+          imageUrl:
+            d.placeImage ??
+            d.PlaceImage ??
+            d.imageUrl ??
+            d.ImageUrl ??
+            d.image_url ??
+            "",
+        });
+      } catch (err) {
+        setServerError(toErrorText(err));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id, mode]);
+
+  const onInput = (e) =>
+    setPlace((p) => ({ ...p, [e.target.name]: e.target.value }));
+
+  const onFileSelect = (e) => {
+    const file = e.target.files?.[0] || null;
+    setImageFile(file);
+    setError((prev) => {
+      const { image, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const validate = () => {
+    const e = {};
+    if (!place.name.trim()) e.name = "Name is required";
+    if (!place.category.trim()) e.category = "Category is required";
+    if (!place.bestTimeToVisit.trim())
+      e.bestTimeToVisit = "Best time to visit is required";
+    if (!place.location.trim()) e.location = "Location is required";
+
+    const hasExistingImage = Boolean(previewUrl && !imageFile);
+    if (mode === "add" && !imageFile) {
+      e.image = "Image is required";
+    }
+    if (mode === "edit" && !imageFile && !hasExistingImage) {
+      e.image = "Image is required";
+    }
+
+    setError(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async (ev) => {
+    ev.preventDefault();
+    setServerError("");
+    if (!validate()) return;
+
+    setSaving(true);
+    try {
+      const base = placeApi.API_BASE_URL;
+
+      const payload = {
+        Name: place.name.trim(),
+        Category: place.category.trim(),
+        BestTimeToVisit: place.bestTimeToVisit.trim(),
+        Location: place.location.trim(),
+      };
+
+      if (imageFile) {
+        payload.PlaceImage = await toBase64(imageFile);
+      } else if (mode === "edit" && place.imageUrl) {
+        payload.PlaceImage = place.imageUrl;
+      }
+
+      if (mode === "add") {
+        await axios.post(`${base}`, payload, {
+          headers: { "Content-Type": "application/json" },
+        });
+        setSuccessMsg("Place added successfully!");
+      } else {
+        await axios.put(`${base}/${id}`, payload, {
+          headers: { "Content-Type": "application/json" },
+        });
+        setSuccessMsg("Place updated successfully!");
+      }
+      setShowSuccess(true);
+    } catch (err) {
+      console.warn("Submit error:", err?.response?.status, err?.response?.data);
+      setServerError(toErrorText(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowSuccess(false);
+    navigate("/places");
+  };
+
+  if (loading) {
+    return (
+      <div className="place-form-page">
+        <div className="pf-map-loader-wrapper">
+          <div className="pf-map-ring-loader">
+            <div className="pf-map-pin" />
+          </div>
+          <p className="pf-map-loader-text">Loading place details…</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="place-form-page" style={{ position: "relative" }}>
+      {/* CONTENT WRAPPER THAT BLURS WHEN MODAL IS OPEN */}
+      <div
+        style={{
+          filter: showSuccess ? "blur(8px)" : "none",
+          pointerEvents: showSuccess ? "none" : "auto", // disable clicks behind the modal
+          transition: "filter 150ms ease",
+        }}
+      >
+        <div className="place-form">
+          <div className="form-header">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => navigate("/home")}
+            >
+              Back
+            </button>
+            <h2 className="form-title">
+              {mode === "add" ? "Create New Place" : "Edit Place"}
+            </h2>
+          </div>
+
+          {serverError ? (
+            <p className="error-text">
+              {typeof serverError === "string"
+                ? serverError
+                : JSON.stringify(serverError)}
+            </p>
+          ) : null}
+
+          <form onSubmit={handleSubmit} noValidate>
+            <div className="form-row">
+              <label htmlFor="name">
+                Name <span className="req-star">*</span>
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={place.name}
+                onChange={onInput}
+                placeholder="Name"
+                autoComplete="off"
+              />
+              {error.name && <div className="error-text">{error.name}</div>}
+            </div>
+
+            <div className="form-row">
+              <label htmlFor="category">
+                Category <span className="req-star">*</span>
+              </label>
+
+              <select
+                id="category"
+                name="category"
+                value={place.category}
+                onChange={onInput}
+              >
+                <option value="">Select category</option>
+                {CATEGORY_OPTIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              {error.category && (
+                <div className="error-text">{error.category}</div>
+              )}
+            </div>
+
+            <div className="form-row">
+              <label htmlFor="bestTimeToVisit">
+                Best Time To Visit <span className="req-star">*</span>
+              </label>
+
+              <input
+                type="text"
+                id="bestTimeToVisit"
+                name="bestTimeToVisit"
+                value={place.bestTimeToVisit}
+                onChange={onInput}
+                placeholder="e.g., April to June"
+                autoComplete="off"
+              />
+              {error.bestTimeToVisit && (
+                <div className="error-text">{error.bestTimeToVisit}</div>
+              )}
+            </div>
+
+            <div className="form-row">
+              <label htmlFor="location">
+                Location <span className="req-star">*</span>
+              </label>
+
+              <input
+                type="text"
+                id="location"
+                name="location"
+                value={place.location}
+                onChange={onInput}
+                placeholder="Location"
+                autoComplete="off"
+              />
+              {error.location && (
+                <div className="error-text">{error.location}</div>
+              )}
+            </div>
+
+            <div className="form-row">
+              <label htmlFor="imageFile">
+                Place Image <span className="req-star">*</span>
+              </label>
+
+              <input
+                type="file"
+                id="imageFile"
+                accept="image/*"
+                onChange={onFileSelect}
+              />
+
+              {error.image && <div className="error-text">{error.image}</div>}
+
+              {previewUrl ? (
+                <div className="image-preview">
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    onError={() => {
+                      if (!imageFile) setPreviewUrl("");
+                    }}
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="form-actions">
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving
+                  ? mode === "add"
+                    ? "Saving…"
+                    : "Updating…"
+                  : mode === "add"
+                  ? "Add Place"
+                  : "Update Place"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* MODAL (separate stacking, no blur) */}
+      <SuccessModal
+        open={showSuccess}
+        message={successMsg}
+        onClose={handleCloseModal}
+      />
+    </div>
+  );
+};
+
+export default PlaceForm;
