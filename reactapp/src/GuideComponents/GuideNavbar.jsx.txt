@@ -1,0 +1,159 @@
+import React from "react";
+import { Link, NavLink } from "react-router-dom";
+import "./GuideNavbar.css";
+
+export default function GuideNavbar({ onLogout }) {
+  const [open, setOpen] = React.useState(false);
+  const menuRef = React.useRef(null);
+  const btnRef = React.useRef(null);
+
+  const DIRECT_GIF =
+    "https://mir-s3-cdn-cf.behance.net/project_modules/source/59b73f47211133.5873edc005312.gif";
+
+  const iframeDoc = `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: transparent;
+      }
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* fill the square, no letterbox */
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <img src="${DIRECT_GIF}" alt="" />
+  </body>
+</html>`.trim();
+
+  React.useEffect(() => {
+    function onDocClick(e) {
+      if (!open) return;
+      const menuEl = menuRef.current;
+      const btnEl = btnRef.current;
+      if (
+        menuEl &&
+        !menuEl.contains(e.target) &&
+        btnEl &&
+        !btnEl.contains(e.target)
+      ) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  React.useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  return (
+    <nav className="gnav" role="navigation" aria-label="Guide navigation">
+      <div className="gnav__inner">
+        <div className="gnav__left">
+          <Link
+            to="/home"
+            className="gnav__brand"
+            aria-label="Go to Travel Tales home"
+          >
+            <span className="gnav__logoWrap logo-iframe-wrap" aria-hidden="true">
+              <iframe
+                title="Travel Tales Logo"
+                className="gnav__logoFrame navbar__logo-iframe"
+                srcDoc={iframeDoc}
+                loading="eager"
+                sandbox="allow-same-origin" 
+              />
+            </span>
+            <span className="gnav__title">Travel Tales</span>
+          </Link>
+        </div>
+
+        <div className="gnav__center" aria-label="Signed in user">
+          <span className="gnav__user" title="Signed in as guide">
+            <span className="gnav__userTxt">
+              <span className="tnav__avatar" aria-hidden="true">👤</span>
+              <strong>
+                
+                <span className="gnav__role">Guide</span>
+              </strong>
+            </span>
+          </span>
+        </div>
+
+        <div className="gnav__right" role="menubar" aria-label="Primary">
+          <NavLink
+            to="/home"
+            className={({ isActive }) => `gnav__link ${isActive ? "is-active" : ""}`}
+            role="menuitem"
+          >
+            Home
+          </NavLink>
+
+          <div
+            className="dd__wrap"
+            onKeyDown={(e) => {
+              if (e.key === "Tab") setOpen(false); // optional: close when tabbing away
+            }}
+          >
+            <button
+              type="button"
+              className={`gnav__btn gnav__link--pill dd__trigger ${open ? "is-open" : ""}`}
+              ref={btnRef}
+              aria-haspopup="menu"
+              aria-expanded={open}
+              aria-controls="guide-place-menu"
+              onClick={() => setOpen((v) => !v)}
+            >
+              Place
+              <span className="dd__chev" aria-hidden="true" />
+            </button>
+
+            <div
+              id="guide-place-menu"
+              className={`dd__menu ${open ? "is-open" : ""}`}
+              role="menu"
+              aria-label="Place"
+              ref={menuRef}
+            >
+              <ul className="dd__list" role="none">
+                <li role="none">
+                  <NavLink to="/places/new" className="dd__item" onClick={() => setOpen(false)}>
+                    Add Place
+                  </NavLink>
+                </li>
+                <li role="none">
+                  <NavLink to="/places" className="dd__item" onClick={() => setOpen(false)}>
+                    View Place
+                  </NavLink>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="gnav__btn gnav__btn--light"
+            onClick={onLogout ?? (() => alert("Logout clicked"))}
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    </nav>
+  );
+}
