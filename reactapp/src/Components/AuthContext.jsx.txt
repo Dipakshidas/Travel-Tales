@@ -1,0 +1,226 @@
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+} from "react";
+import axios from "axios";
+
+const AuthContext = createContext(null);
+
+const LS_TOKEN = "auth_token";
+const LS_USER  = "user";
+
+
+function decodeJwt(token) {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+    const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return json || null;
+  } catch {
+    return null;
+  }
+}
+
+
+function resolveExpiry(expires, token) {
+  if (expires) {
+    if (typeof expires === "number") return new Date(expires * 1000);
+    if (/^\d+$/.test(String(expires))) return new Date(Number(expires) * 1000);
+    const d = new Date(expires);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (token) {
+    const decoded = decodeJwt(token);
+    if (decoded?.exp) return new Date(decoded.exp * 1000);
+  }
+  return null;
+}
+
+
+function normalizeRoles(maybeRoles) {
+  if (!maybeRoles) return [];
+  const arr = Array.isArray(maybeRoles) ? maybeRoles : [maybeRoles];
+  return arr
+    .map((r) => {
+      if (r == null) return "";
+      if (typeof r === "string") return r;
+      return r.name ?? r.role ?? r.value ?? String(r);
+    })
+    .map((s) => String(s).trim().toLowerCase())
+    .filter(Boolean);
+}
+
+
+function pickPrimaryRole(maybeRoles) {
+  const roles = normalizeRoles(maybeRoles);
+
+  const isAdmin = roles.some((r) => r.includes("admin") || r.includes("administrator"));
+  if (isAdmin) return "admin";
+
+  const isGuide = roles.some((r) => r.includes("guide"));
+  if (isGuide) return "guide";
+
+  const isTraveller = roles.some(
+    (r) => r.includes("traveller") || r.includes("traveler") || r.includes("user")
+  );
+  if (isTraveller) return "traveller";
+
+  return null;
+}
+
+
+function deriveApprovalFlag(claimsOrUser) {
+  const c = claimsOrUser || {};
+
+  if (typeof c.isGuideApproved === "boolean") return c.isGuideApproved;
+  if (typeof c.guideApproved === "boolean") return c.guideApproved;
+  if (typeof c.is_guide_approved === "boolean") return c.is_guide_approved;
+  if (typeof c.isApproved === "boolean") return c.isApproved;     // AspNetUsers
+  if (typeof c.IsApproved === "boolean") return c.IsApproved;     // AspNetUsers (PascalCase)
+
+  const s = String(
+    c.isGuideApproved ??
+      c.guideApproved ??
+      c.is_guide_approved ??
+      c.isApproved ??
+      c.IsApproved ??
+      ""
+  ).toLowerCase();
+
+  if (s === "true") return true;
+  if (s === "false") return false;
+
+  return null;
+}
+
+function getUserId(claimsOrUser) {
+  const c = claimsOrUser || {};
+  return c.sub ?? c.userId ?? c.user_id ?? c.id ?? null;
+}
+
+
+function deriveAuthState({ token, userLike }) {
+  const decoded = token ? decodeJwt(token) : null;
+  const rawRoles = userLike?.roles ?? decoded?.roles ?? decoded?.role;
+  const role = pickPrimaryRole(rawRoles);
+
+  const approvedFromToken = deriveApprovalFlag(decoded);
+  const approvedFromUser  = deriveApprovalFlag(userLike);
+  const isGuideApproved = approvedFromUser ?? approvedFromToken;
+
+  let status = "approved"; // default for admin & traveller
+  if (role === "guide") {
+    if (isGuideApproved === true) status = "approved";
+    else if (isGuideApproved === false) status = "pending";
+    else status = "unknown";
+  }
+
+  return {
+    role: role ?? null,
+    status,
+    userId: getUserId(decoded) ?? getUserId(userLike) ?? null,
+  };
+}
+
+
+export function getDefaultHomePath(auth) {
+  if (!auth) return "/home";
+  if (auth.role === "admin") return "/admin";                
+  if (auth.role === "guide") {
+    return auth.status === "approved" ? "/places" : "/home";  
+  }
+  if (auth.role === "traveller") return "/traveller/places";
+  return "/home";
+}
+
+export function AuthProvider({ children }) {
+  const [auth, setAuth] = useState(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem(LS_TOKEN);
+        const rawUser = localStorage.getItem(LS_USER);
+
+        if (!token || !rawUser) {
+          setAuth(null);
+          return;
+        }
+
+        const user = JSON.parse(rawUser);
+        const expiry = resolveExpiry(user?.expires, token);
+
+        const SKEW_MS = 60 * 1000;
+        if (expiry && expiry.getTime() + SKEW_MS < Date.now()) {
+          localStorage.removeItem(LS_TOKEN);
+          localStorage.removeItem(LS_USER);
+          setAuth(null);
+          return;
+        }
+
+       
+        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+
+        const { role, status, userId } = deriveAuthState({ token, userLike: user });
+        setAuth({ token, user, role, status, userId });
+      } catch {
+        setAuth(null);
+      } finally {
+        setReady(true);
+      }
+    })();
+  }, []);
+
+  
+  const login = useCallback((payload) => {
+    const token = payload?.token;
+
+    if (token) {
+      localStorage.setItem(LS_TOKEN, token);
+      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+    }
+
+    const user =
+      payload?.user ?? {
+        username: payload?.username,
+        email: payload?.email,
+        roles: payload?.roles,
+        
+        isGuideApproved: payload?.isGuideApproved ?? payload?.guideApproved,
+        isApproved: payload?.isApproved ?? payload?.IsApproved,
+        expires: payload?.expires,
+        userId: payload?.userId,
+      };
+
+    localStorage.setItem(LS_USER, JSON.stringify(user));
+
+    const { role, status, userId } = deriveAuthState({ token, userLike: user });
+    setAuth({ token, user, role, status, userId });
+  }, []);
+
+  const logout = useCallback(() => {
+    try {
+      localStorage.removeItem(LS_TOKEN);
+      localStorage.removeItem(LS_USER);
+      delete axios.defaults.headers.common.Authorization;
+    } finally {
+      setAuth(null);
+    }
+  }, []);
+
+  const value = useMemo(
+    () => ({ auth, login, logout, ready }),
+    [auth, login, logout, ready]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
