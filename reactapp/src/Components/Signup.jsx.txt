@@ -1,0 +1,338 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import axios from "axios";
+import "./Signup.css";
+import placeApi from "../apiConfig";
+
+const SuccessModal = ({ open, message, onClose }) => {
+  if (!open) return null;
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="modal-box">
+        <p className="modal-message">{message}</p>
+        <button type="button" className="modal-ok-btn" onClick={onClose}>
+          Ok
+        </button>
+      </div>
+    </div>
+  );
+};
+
+function normalizeRoleFromQuery(qpRole) {
+  if (!qpRole) return "";
+  const r = String(qpRole).toLowerCase();
+  if (r === "guide") return "Guide";
+  if (r === "traveller" || r === "traveler") return "Traveller";
+  return "";
+}
+
+
+function getAuthBaseFromApiConfig() {
+  return placeApi.API_BASE_URL.replace(/\/api\/places\/?$/i, "/api/Authentication");
+}
+
+function getRegisterUrl(role) {
+  const AUTH_BASE = getAuthBaseFromApiConfig();
+  const isGuide = String(role).toLowerCase() === "guide";
+  return isGuide ? `${AUTH_BASE}/register/guide` : `${AUTH_BASE}/register`;
+}
+
+function firstModelStateError(problemDetails) {
+  try {
+    const errors = problemDetails?.errors;
+    if (!errors) return null;
+    const key = Object.keys(errors)[0];
+    if (!key) return null;
+    const arr = errors[key];
+    return Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+const Signup = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const qpRole = searchParams.get("role");
+  const normalizedRoleFromQP = useMemo(() => normalizeRoleFromQuery(qpRole), [qpRole]);
+  const roleLocked = Boolean(normalizedRoleFromQP);
+
+  const initialForm = {
+    username: "",
+    email: "",
+    mobile: "",
+    password: "",
+    confirm: "",
+    role: normalizedRoleFromQP || "",
+  };
+  const initialError = {
+    username: "",
+    email: "",
+    mobile: "",
+    password: "",
+    confirm: "",
+    role: "",
+  };
+
+  const [form, setForm] = useState(initialForm);
+  const [error, setError] = useState(initialError);
+  const [serverError, setServerError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
+
+  useEffect(() => {
+    if (normalizedRoleFromQP) {
+      setForm((s) => ({ ...s, role: normalizedRoleFromQP }));
+      setError((e) => ({ ...e, role: "" }));
+    }
+  }, [normalizedRoleFromQP]);
+
+  function onInput(e) {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    setError({ ...error, [e.target.name]: "" });
+    setServerError("");
+  }
+
+  function validate() {
+    const e = { ...initialError };
+    if (!form.username.trim()) e.username = "User Name is required";
+    if (!form.email.trim()) e.email = "Email is required";
+    if (!form.mobile.trim()) e.mobile = "Mobile number is required";
+    if (!form.password.trim()) e.password = "Password is required";
+    if (!form.confirm.trim()) e.confirm = "Confirm Password is required";
+    if (!form.role.trim()) e.role = "Please select a role";
+
+    if (form.email.trim() && !/^\S+@\S+\.\S+$/.test(form.email)) {
+      e.email = "Invalid email format";
+    }
+    if (form.mobile.trim() && !/^[6-9]\d{9}$/.test(form.mobile)) {
+      e.mobile = "Mobile must be 10 digits and start with 6–9";
+    }
+    if (form.password && form.confirm && form.password !== form.confirm) {
+      e.confirm = "Passwords do not match";
+    }
+
+    setError(e);
+    return Object.values(e).every((msg) => !msg);
+  }
+
+  async function handleSubmit(ev) {
+    ev.preventDefault();
+    setServerError("");
+    if (!validate()) return;
+
+    setSaving(true);
+    try {
+      const payload = {
+        Email: form.email.trim(),
+        Username: form.username.trim(),
+        Password: form.password,
+        MobileNumber: form.mobile.trim(),
+        UserRole: form.role.trim(),
+      };
+
+      const url = getRegisterUrl(form.role.trim());
+      console.log("[Signup] POST URL:", url);
+
+      const res = await axios.post(url, payload, {
+        headers: { "Content-Type": "application/json" },
+        timeout: 20000,
+        validateStatus: () => true,
+      });
+
+      if (res.status === 200 || res.status === 201) {
+        setSuccessMsg(res.data?.message || "User Registration is Successful!");
+        setShowSuccess(true);
+        setForm({
+          username: "",
+          email: "",
+          mobile: "",
+          password: "",
+          confirm: "",
+          role: roleLocked ? normalizedRoleFromQP : "",
+        });
+        return;
+      }
+
+      if (res.status === 409) {
+        setServerError(res.data?.message || "User already exists.");
+        return;
+      }
+
+      if (res.status === 400) {
+        const modelErr = firstModelStateError(res.data);
+        const msg =
+          res.data?.message ||
+          modelErr ||
+          res.data?.title ||
+          "Signup failed. Please check your input.";
+        setServerError(msg);
+        return;
+      }
+
+      setServerError(
+        res.data?.message ||
+          `Request failed (${res.status} ${res.statusText || ""}). Please try again.`
+      );
+    } catch (err) {
+      console.error("Signup error (unexpected):", {
+        message: err?.message,
+        status: err?.response?.status,
+        data: err?.response?.data,
+      });
+      setServerError(
+        err?.response?.data?.message || err?.message || "Signup failed. Please try again."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCloseModal() {
+    setShowSuccess(false);
+    navigate("/login");
+  }
+
+  return (
+    <div className="signup-page">
+      <div className="signup-card">
+        <div className="signup-inner">
+          <div className="form-header">
+            <Link to="/">
+              <button type="button" className="btn">Back</button>
+            </Link>
+            <h2 className="signup-title">Signup</h2>
+          </div>
+
+          {roleLocked && (
+            <p className="muted" style={{ marginTop: 4 }}>
+              You’re signing up as <strong>{normalizedRoleFromQP}</strong>.
+            </p>
+          )}
+
+          {serverError ? <p className="error-text">{serverError}</p> : null}
+
+          <form className="signup-form" onSubmit={handleSubmit} noValidate>
+            <div className="form-field">
+              <label className="form-label">
+                User Name <span className="req">*</span>
+              </label>
+              <input
+                className={`input-underline ${error.username ? "input-error" : ""}`}
+                type="text"
+                name="username"
+                placeholder="Username"
+                value={form.username}
+                onChange={onInput}
+                autoComplete="username"
+              />
+              {error.username ? <div className="error-text">{error.username}</div> : null}
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">
+                Email <span className="req">*</span>
+              </label>
+              <input
+                className={`input-underline ${error.email ? "input-error" : ""}`}
+                type="email"
+                name="email"
+                placeholder="Email"
+                value={form.email}
+                onChange={onInput}
+                autoComplete="email"
+              />
+              {error.email ? <div className="error-text">{error.email}</div> : null}
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">
+                Mobile Number <span className="req">*</span>
+              </label>
+              <input
+                className={`input-underline ${error.mobile ? "input-error" : ""}`}
+                type="text"
+                name="mobile"
+                placeholder="10-digit mobile"
+                value={form.mobile}
+                onChange={onInput}
+                inputMode="numeric"
+              />
+              {error.mobile ? <div className="error-text">{error.mobile}</div> : null}
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">
+                Password <span className="req">*</span>
+              </label>
+              <input
+                className={`input-underline ${error.password ? "input-error" : ""}`}
+                type="password"
+                name="password"
+                placeholder="Password"
+                value={form.password}
+                onChange={onInput}
+                autoComplete="new-password"
+              />
+              {error.password ? <div className="error-text">{error.password}</div> : null}
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">
+                Confirm Password <span className="req">*</span>
+              </label>
+              <input
+                className={`input-underline ${error.confirm ? "input-error" : ""}`}
+                type="password"
+                name="confirm"
+                placeholder="Confirm Password"
+                value={form.confirm}
+                onChange={onInput}
+                autoComplete="new-password"
+              />
+              {error.confirm ? <div className="error-text">{error.confirm}</div> : null}
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">
+                Role <span className="req">*</span>
+              </label>
+              <div className="select-wrap">
+                <select
+                  className={`select ${error.role ? "input-error" : ""}`}
+                  name="role"
+                  value={form.role}
+                  onChange={onInput}
+                  disabled={roleLocked}
+                >
+                  <option value="">Select Role</option>
+                  <option value="Guide">Guide</option>
+                  <option value="Traveller">Traveller</option>
+                </select>
+                <span className="select-caret">▾</span>
+              </div>
+              {error.role ? <div className="error-text">{error.role}</div> : null}
+            </div>
+
+            <div className="form-actions">
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? "Submitting…" : "Submit"}
+              </button>
+            </div>
+
+            <p className="footer-text">
+              Already have an Account?{" "}
+              <Link className="link-login" to="/login">LogIn</Link>
+            </p>
+          </form>
+        </div>
+      </div>
+
+      <SuccessModal open={showSuccess} message={successMsg} onClose={handleCloseModal} />
+    </div>
+  );
+};
+
+export default Signup;
