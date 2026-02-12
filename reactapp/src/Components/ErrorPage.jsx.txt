@@ -1,0 +1,130 @@
+
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
+import './ErrorPage.css';
+
+const ErrorPage = () => {
+  const navigate = useNavigate();
+  const { state } = useLocation();
+
+
+  const status = state?.status ?? 404;
+  const message =
+    state?.message ??
+    (status === 404 ? 'The page you’re looking for is out of range.' : 'Something went wrong.');
+  const from = state?.from ?? '';
+  const endpointTried = state?.endpointTried;
+
+
+  const [blink, setBlink] = useState(false);
+  useEffect(() => {
+    const id = setInterval(() => setBlink((b) => !b), 2800);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="rb-shell" role="alert" aria-live="polite">
+      <div className="rb-card">
+     
+        <div className="rb-illustration">
+          <div className="rb-gear rb-gear--sm" aria-hidden="true" />
+          <div className="rb-gear rb-gear--md" aria-hidden="true" />
+          <div className="rb-gear rb-gear--lg" aria-hidden="true" />
+
+          <svg className="rb-robot" viewBox="0 0 420 360" aria-hidden="true">
+         
+            <ellipse cx="210" cy="330" rx="110" ry="16" fill="rgba(0,0,0,0.12)"></ellipse>
+
+        
+            <rect x="130" y="170" width="160" height="110" rx="16" fill="#FFBF2F" stroke="#D89E1E" strokeWidth="4" />
+            <circle cx="170" cy="215" r="10" fill="#333" opacity="0.2" />
+            <rect x="190" y="205" width="80" height="22" rx="6" fill="#FFD86B" stroke="#D89E1E" strokeWidth="3" />
+
+            <g className="rb-head">
+              <rect x="140" y="80" width="140" height="90" rx="14" fill="#FFBF2F" stroke="#D89E1E" strokeWidth="4" />
+              
+              <text x="210" y="58" textAnchor="middle" fontSize="32" fontWeight="800" fill="#333">Oops!</text>
+
+             
+              <g>
+                
+                <circle cx="180" cy="125" r="18" fill="#333" />
+               
+                {blink ? (
+                  <rect x="168" y="122" width="24" height="6" rx="3" fill="#FFECAC" />
+                ) : (
+                  <circle cx="180" cy="125" r="8" fill="#FFECAC" />
+                )}
+              </g>
+              <g>
+                
+                <circle cx="240" cy="125" r="18" fill="#333" />
+                
+                {blink ? (
+                  <rect x="228" y="122" width="24" height="6" rx="3" fill="#FFECAC" />
+                ) : (
+                  <circle cx="240" cy="125" r="8" fill="#FFECAC" />
+                )}
+              </g>
+
+              
+              <line x1="210" y1="80" x2="210" y2="58" stroke="#D89E1E" strokeWidth="4" />
+              <circle cx="210" cy="54" r="6" fill="#FFC947" stroke="#D89E1E" strokeWidth="3" />
+            </g>
+
+            <g className="rb-arm rb-arm--left">
+              <rect x="105" y="190" width="30" height="16" rx="8" fill="#D89E1E" />
+              <rect x="90" y="182" width="26" height="16" rx="8" fill="#FFBF2F" stroke="#D89E1E" strokeWidth="3" />
+              <circle cx="86" cy="190" r="12" fill="#FFBF2F" stroke="#D89E1E" strokeWidth="3" />
+            </g>
+          
+            <g className="rb-arm rb-arm--right">
+              <rect x="285" y="190" width="30" height="16" rx="8" fill="#D89E1E" />
+              <rect x="314" y="182" width="26" height="16" rx="8" fill="#FFBF2F" stroke="#D89E1E" strokeWidth="3" />
+              <circle cx="344" cy="190" r="12" fill="#FFBF2F" stroke="#D89E1E" strokeWidth="3" />
+            </g>
+
+        
+            <g>
+              <rect x="170" y="280" width="24" height="34" rx="6" fill="#FFBF2F" stroke="#D89E1E" strokeWidth="3" />
+              <rect x="226" y="280" width="24" height="34" rx="6" fill="#FFBF2F" stroke="#D89E1E" strokeWidth="3" />
+              <rect x="156" y="312" width="52" height="12" rx="6" fill="#FFC947" />
+              <rect x="212" y="312" width="52" height="12" rx="6" fill="#FFC947" />
+            </g>
+
+            
+            <g className="rb-plant">
+              <rect x="32" y="270" width="26" height="40" rx="6" fill="#FFBF2F" stroke="#D89E1E" strokeWidth="3" />
+              <path d="M40 265 C46 255, 54 255, 58 265" fill="#4B5B68" />
+              <path d="M52 265 C56 255, 64 255, 70 265" fill="#6B7E8E" />
+            </g>
+          </svg>
+        </div>
+
+        
+        <div className="rb-copy">
+          <div className="rb-code">{status}</div>
+          <div className="rb-error-label">ERROR</div>
+          <p className="rb-oops">{message}</p>
+
+          <div className="rb-actions">
+            <button className="rb-btn rb-btn--primary" onClick={() => navigate('/login')}>
+              Go Back
+            </button>
+            <Link className="rb-btn rb-btn--ghost" to="/home">Home</Link>
+          </div>
+
+          {(from || endpointTried) && (
+            <p className="rb-meta">
+              {from && <span>From: <b>{from}</b></span>}
+              {from && endpointTried && <span aria-hidden="true"> • </span>}
+              {endpointTried && <span className="rb-endpoint">Endpoint: {endpointTried}</span>}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ErrorPage;
