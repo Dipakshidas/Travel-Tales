@@ -1,0 +1,125 @@
+
+:root {
+  --brand-red: #d63939;
+  --brand-blue: #0d6efd;
+  --brand-teal: #20c997;
+  --brand-yellow: #fff7cc;
+  --ink: #1b1f24;
+  --muted: #6c757d;
+  --card-bg: rgba(255, 255, 255, 0.85);
+  --shadow-soft: 0 4px 18px rgba(0, 0, 0, 0.08);
+  --center-max: 1000px;
+}
+
+body {
+  background: linear-gradient(180deg, #f9fafc 0%, #eef1f6 100%);
+  font-family: "Inter", sans-serif;
+}
+
+.container.py-4 {
+  max-width: var(--center-max);
+  margin: 0 auto !important;
+  padding: 20px !important;
+}
+
+.container.py-4 > .rounded-4 {
+  --bg-start: #c5473f;
+  --bg-end:   #d64c44;
+  padding: 26px !important;
+  border-radius: 14px !important;
+  box-shadow: var(--shadow-soft);
+}
+
+.container.py-4 .approval-header-inner {
+  background: var(--brand-yellow);
+  padding: 14px 18px;
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pending-badge {
+  background: #ffffff;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 600;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.card.border-0.shadow-sm {
+  background: var(--card-bg);
+  border-radius: 14px !important;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.table thead {
+  background: linear-gradient(180deg, rgba(13,110,253,0.15), rgba(13,110,253,0.05));
+}
+
+.table thead th {
+  font-weight: 700;
+  color: #0b2d56;
+  padding: 14px 16px !important;
+}
+
+.table tbody tr {
+  background: white;
+  transition: 0.15s ease;
+  border-radius: 12px;
+}
+
+.table tbody tr:nth-child(even) {
+  background: #f5f8ff;
+}
+
+.table tbody tr:hover {
+  background: rgba(32, 201, 151, 0.12);
+}
+
+.table td {
+  padding: 14px 16px !important;
+  vertical-align: middle;
+  font-size: 0.96rem;
+}
+
+.btn {
+  border-radius: 30px !important;
+  padding: 6px 18px !important;
+  font-weight: 600 !important;
+  transition: 0.2s ease !important;
+}
+
+.btn-outline-success {
+  border-color: var(--brand-teal) !important;
+  color: var(--brand-teal) !important;
+}
+.btn-outline-success:hover {
+  background: var(--brand-teal) !important;
+  color: white !important;
+}
+.h3 mb-1{
+  color: black;
+}
+
+.btn-outline-danger {
+  border-color: var(--brand-red) !important;
+  color: var(--brand-red) !important;
+}
+.btn-outline-danger:hover {
+  background: var(--brand-red) !important;
+  color: white !important;
+}
+
+.container.py-4 p.text-center {
+  color: var(--muted) !important;
+  margin-top: 14px;
+}
+
+@media (max-width: 768px) {
+  .container.py-4 { padding: 14px !important; }
+  .table .text-end { text-align: center !important; }
+  .btn { width: 100%; margin-bottom: 6px; }
+}
