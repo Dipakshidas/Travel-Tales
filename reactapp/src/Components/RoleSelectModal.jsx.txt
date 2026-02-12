@@ -1,0 +1,215 @@
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
+import "./RoleSelectModal.css";
+
+function ensureModalRoot() {
+  if (typeof document === "undefined") return null;
+  let root = document.getElementById("tt-modal-root");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "tt-modal-root";
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
+export default function RoleSelectModal({ open, onClose }) {
+  const navigate = useNavigate();
+  const firstBtnRef = useRef(null);
+  const modalRoot = ensureModalRoot();
+
+  const travellerGif = "https://cdn-icons-gif.flaticon.com/17270/17270744.gif";
+  const guideMp4 = "https://cdn-icons-mp4.flaticon.com/512/19004/19004822.mp4";
+
+  const [shouldRender, setShouldRender] = useState(open);
+  const [isClosing, setIsClosing] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setShouldRender(true);
+      setIsClosing(false);
+    } else if (shouldRender) {
+      setIsClosing(true);
+      const t = setTimeout(() => {
+        setShouldRender(false);
+        setIsClosing(false);
+      }, 220);
+      return () => clearTimeout(t);
+    }
+  }, [open, shouldRender]);
+
+  const handleClose = useCallback(() => {
+    if (!open) return;
+
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose?.();
+      setIsClosing(false);
+      setShouldRender(false);
+    }, 220);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKey = (e) => {
+      if (e.key === "Escape") handleClose();
+
+      if (e.key === "Tab") {
+        const scope = document.querySelector(".tt-modal-window");
+        if (!scope) return;
+        const focusables = scope.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusables.length) return;
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", onKey);
+    const t = setTimeout(() => firstBtnRef.current?.focus(), 0);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKey);
+      clearTimeout(t);
+    };
+  }, [open, handleClose]); 
+
+  const goToSignup = (role) => {
+    onClose?.();
+    navigate(`/signup?role=${role}`);
+  };
+
+  if (!shouldRender || !modalRoot) return null;
+
+  const overlay = (
+    <div
+      className={`tt-modal-overlay ${isClosing ? "tt-anim-out" : "tt-anim-in"}`}
+      role="presentation"
+      onMouseDown={handleClose}
+    >
+      <div
+        className={`tt-modal-window ${isClosing ? "tt-anim-out" : "tt-anim-in"}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="role-modal-title"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="tt-modal-header">
+          <h3 id="role-modal-title" className="tt-title">
+            Create your account
+          </h3>
+          <button className="tt-close" onClick={handleClose} aria-label="Close">
+            ×
+          </button>
+        </div>
+
+        <div className="tt-modal-body">
+          <button
+            className="tt-role-card tt-role-card--tinted"
+            onClick={() => goToSignup("guide")}
+            ref={firstBtnRef}
+          >
+            <div className="tt-card-head">
+              <div className="tt-badge">Guide</div>
+
+              <video
+                className="tt-role-media tt-role-video tt-role-video--guide"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                aria-label="Guide illustration"
+              >
+                <source src={guideMp4} type="video/mp4" />
+              </video>
+            </div>
+
+            <ul className="tt-list">
+              <li>Create &amp; publish guided routes</li>
+              <li>Set pricing &amp; availability</li>
+              <li>Chat with travellers</li>
+            </ul>
+
+            <span className="tt-btn vp-btn-primary">
+              Continue as Guide
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path
+                  d="M5 12h14m0 0-5-5m5 5-5 5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+
+            <span className="tt-hover-glow" aria-hidden="true"></span>
+          </button>
+
+          <div className="tt-divider" aria-hidden="true" />
+
+          <button
+            className="tt-role-card tt-role-card--tinted"
+            onClick={() => goToSignup("traveller")}
+          >
+            <div className="tt-card-head">
+              <div className="tt-badge tt-badge--alt">Traveller</div>
+
+              <img
+                className="tt-role-media tt-role-gif tt-role-gif--traveller"
+                src={travellerGif}
+                alt="Traveller illustration"
+                loading="lazy"
+                draggable="false"
+              />
+            </div>
+
+            <ul className="tt-list">
+              <li>Browse curated itineraries</li>
+              <li>Book trusted local guides</li>
+              <li>Save &amp; customize favorites</li>
+            </ul>
+
+            <span className="tt-btn vp-btn-primary">
+              Continue as Traveller
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path
+                  d="M5 12h14m0 0-5-5m5 5-5 5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+
+            <span className="tt-hover-glow" aria-hidden="true"></span>
+          </button>
+        </div>
+
+        <p className="tt-hint">
+          You can switch roles later in your profile settings.
+        </p>
+      </div>
+    </div>
+  );
+
+  return createPortal(overlay, modalRoot);
+}
